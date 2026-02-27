@@ -1,0 +1,20 @@
+# email-cleanup.nail — Safe email organization
+# Demonstrates: BUDGET + INVARIANT + @interruptible + SCOPE
+
+SCOPE: email/inbox, email/inbox/unread, email/inbox/spam
+FORBIDDEN: email/sent, email/drafts, email/trash
+
+BUDGET calls=100, mutations=20, time=5m
+
+INVARIANT: emails_deleted <= 5
+INVARIANT: emails_after >= (emails_before * 0.90)
+
+@interruptible(checkpoint_every=10)
+ORGANIZE_INBOX() → SUMMARY
+  effect: IO.read, IO.write
+
+@irreversible
+@confirm(level="warn")
+DELETE_EMAIL(id: EMAIL_ID) → VOID
+  effect: IO.destructive
+  requires: confirmed_by_user OR (is_spam AND confidence >= 0.95)

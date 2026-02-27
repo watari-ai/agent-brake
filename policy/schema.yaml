@@ -1,0 +1,32 @@
+# nail-sentinel policy schema
+
+budget:
+  calls: 100
+  mutations: 20
+  time: "5m"
+  cost: "$0.50"
+
+invariants:
+  - "deleted_count <= 5"
+  - "total_items_after >= (total_items_before * 0.80)"
+
+interruptible:
+  checkpoint_every: 10
+  channels:
+    - sigint
+    - slack
+    - api
+
+scope:
+  allow:
+    - "email/inbox/**"
+    - "files/tmp/**"
+  deny:
+    - "email/sent"
+    - "files/system/**"
+
+confirm:
+  destructive:
+    channel: slack
+    timeout: "5m"
+    default: deny

@@ -1,0 +1,17 @@
+# file-ops.nail — Safe file operations
+# Demonstrates: REPO + @irreversible + BUDGET
+
+REPO: ./project/src/**, ./project/tests/**
+FORBIDDEN: ./project/.env, ./project/secrets/**, /etc/**, /usr/**
+
+BUDGET mutations=50, time=10m
+
+INVARIANT: files_deleted == 0
+
+@irreversible
+DELETE_FILE(path: PATH) → VOID
+  effect: IO.destructive
+
+EDIT_FILE(path: PATH, changes: DIFF) → VOID
+  effect: IO.write
+  requires: path matches REPO

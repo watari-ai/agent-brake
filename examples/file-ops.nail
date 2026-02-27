@@ -1,5 +1,5 @@
 # file-ops.nail — Safe file operations
-# Demonstrates: REPO + @irreversible + BUDGET
+# agent-brake example: REPO + @irreversible + BUDGET
 
 REPO: ./project/src/**, ./project/tests/**
 FORBIDDEN: ./project/.env, ./project/secrets/**, /etc/**, /usr/**

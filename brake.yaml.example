@@ -1,4 +1,4 @@
-# nail-sentinel policy schema
+# brake.yaml.example — agent-brake policy configuration
 
 budget:
   calls: 100
@@ -14,7 +14,9 @@ interruptible:
   checkpoint_every: 10
   channels:
     - sigint
-    - slack
+    - natural_language:
+        patterns: ["stop", "halt", "cancel", "やめて", "止まって", "止めて"]
+        confidence_threshold: 0.85
     - api
 
 scope:

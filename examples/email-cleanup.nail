@@ -1,5 +1,9 @@
 # email-cleanup.nail — Safe email organization
-# Demonstrates: BUDGET + INVARIANT + @interruptible + SCOPE
+# agent-brake example: BUDGET + INVARIANT + @interruptible + SCOPE
+#
+# This prevents the "context compaction ate my intent" failure mode:
+# even if the LLM forgets it was supposed to *organize* (not delete),
+# the runtime enforces: max 5 deletions, always stoppable, inbox-only access.
 
 SCOPE: email/inbox, email/inbox/unread, email/inbox/spam
 FORBIDDEN: email/sent, email/drafts, email/trash

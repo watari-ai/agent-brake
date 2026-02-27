@@ -1,91 +1,140 @@
-# nail-sentinel
+# agent-brake
 
-> AI agents need brakes. nail-sentinel is the brakes.
+> AI agents need brakes. agent-brake is the brakes.
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![NAIL](https://img.shields.io/badge/powered%20by-NAIL-orange)](https://github.com/watari-ai/nail)
 
-nail-sentinel is a runtime safety layer for AI agents, powered by [NAIL](https://github.com/watari-ai/nail).
+**agent-brake** is a runtime safety layer for AI agents.
 
-Where [mcp-fw](https://github.com/zyom45/mcp-fw) controls *which tools an agent can see*, nail-sentinel controls *what an agent can do while running* — enforcing budgets, invariants, and guaranteed stop signals.
+It sits between your AI agent and the world, enforcing hard limits that the LLM cannot override — no matter what the conversation context says.
 
 ## The Problem
 
 > "I asked my AI to organize my emails. Context compaction dropped the 'organize' part. The agent deleted everything. STOP had no effect."
 
-This failure has three layers:
-1. **Intent was lost** — context compaction ate the goal
-2. **No quantity limits** — destructive ops ran unbounded  
-3. **No interrupt mechanism** — STOP was ignored at runtime
+Three layers of failure:
 
-nail-sentinel addresses all three at the language level.
+1. **Intent was lost** — context compaction ate the goal, leaving only "delete"
+2. **No quantity limits** — destructive ops ran unbounded
+3. **No interrupt mechanism** — STOP messages were ignored at runtime
+
+agent-brake addresses all three at the runtime level.
 
 ## Core Primitives
 
-### BUDGET — Execution limits
-```nail
-BUDGET calls=50, mutations=10, time=30s
-DELETE_EMAIL(id: STRING) → VOID
-effect: IO.destructive
+### BUDGET — Hard execution limits
 ```
-Hard stop when limits are reached. The runtime enforces this, not the LLM.
+BUDGET calls=50, mutations=10, time=30s
+```
+The runtime enforces this. Not the LLM. When the budget is hit, execution stops unconditionally.
 
 ### INVARIANT — State constraints
-```nail
+```
 INVARIANT: deleted_count <= 5
 INVARIANT: total_emails_after >= (total_emails_before * 0.8)
 ```
-Conditions that must hold throughout execution. Violated invariant = immediate halt.
+Conditions checked before every destructive operation. Violated = immediate halt.
 
-### @interruptible — Guaranteed stop
-```nail
-@interruptible(checkpoint_every=5)
-PROCESS_EMAILS(ids: LIST<EMAIL_ID>) → VOID
+### @interruptible — Guaranteed STOP
 ```
-Every 5 operations, the runtime checks for interrupt signals (SIGINT, Slack STOP, API cancel). Stop is **guaranteed** to be honored.
+@interruptible(checkpoint_every=5)
+```
+Every 5 operations, the runtime checks for stop signals:
+- `SIGINT` (Ctrl+C)
+- Message containing "stop", "halt", "やめて", "止まって" etc.
+- HTTP `DELETE /run/{id}`
 
-### @irreversible + dry-run — Destructive op awareness
-```nail
+**STOP is always honored within N operations. This is a runtime guarantee, not an LLM promise.**
+
+### @irreversible — Destructive op marking
+```
 @irreversible
 DELETE_EMAIL(id: STRING) → VOID
-effect: IO.destructive
 ```
 ```bash
-nail run policy.nail --dry-run
-# Lists all @irreversible calls without executing them
+agent-brake run --dry-run  # lists all @irreversible calls without executing
 ```
 
 ### SCOPE — Access boundaries
-```nail
-SCOPE: email/inbox/unread, email/inbox/spam
+```
+SCOPE: email/inbox/**
 FORBIDDEN: email/sent, email/drafts
 ```
-Static analysis blocks out-of-scope access before execution.
+Static enforcement. Out-of-scope access never reaches the agent.
 
-### @confirm — Human-in-the-loop
-```nail
+### @confirm — Human-in-the-loop gate
+```
 @confirm(level="destructive", channel="slack")
 DROP_TABLE(name: STRING) → VOID
 ```
-Requires human approval before executing destructive operations.
+Requires explicit human approval. Times out and denies if no response.
 
-## Relationship to mcp-fw
+## Quick Start
 
-| | mcp-fw | nail-sentinel |
-|---|---|---|
-| Target | MCP tools (static) | Agent execution (runtime) |
-| Controls | Tool availability | Behavior during a run |
-| Enforcement | Before invocation | During execution |
-| STOP signal | — | Language-level guarantee |
+```bash
+pip install agent-brake  # coming soon
+```
 
-Both tools compose: mcp-fw at the perimeter, nail-sentinel at the runtime.
+```yaml
+# brake.yaml
+budget:
+  calls: 100
+  mutations: 20
+  time: 5m
+
+invariants:
+  - "deleted_count <= 5"
+  - "total_items_after >= (total_items_before * 0.80)"
+
+interruptible:
+  checkpoint_every: 10
+  channels:
+    - sigint
+    - natural_language:
+        patterns: ["stop", "halt", "cancel", "やめて", "止まって", "止めて"]
+        confidence_threshold: 0.85
+    - api
+
+scope:
+  allow: ["email/inbox/**"]
+  deny: ["email/sent", "email/drafts"]
+
+confirm:
+  destructive:
+    channel: slack
+    timeout: 5m
+    default: deny
+```
+
+## Composing with mcp-fw
+
+agent-brake works at the **runtime layer**, complementing [mcp-fw](https://github.com/zyom45/mcp-fw) which works at the **MCP tool layer**:
+
+```
+AI Agent
+    │
+    ▼
+┌───────────┐
+│  mcp-fw   │  ← controls which tools the agent can see (static)
+└─────┬─────┘
+      │
+      ▼
+┌───────────────┐
+│  agent-brake  │  ← controls what the agent does while running (dynamic)
+│               │    BUDGET / INVARIANT / STOP signal / SCOPE
+└───────────────┘
+```
+
+Use both for defense in depth.
+
+## Powered by NAIL
+
+agent-brake uses [NAIL](https://github.com/watari-ai/nail)'s effect type system to classify operations automatically. You don't need to manually tag every function — NAIL infers whether a call reads, writes, deletes, or accesses the network.
 
 ## Status
 
-🚧 **Design phase** — Primitives are being finalized. Feedback welcome.
-
-- Core NAIL: [watari-ai/nail](https://github.com/watari-ai/nail)
-- MCP layer: [zyom45/mcp-fw](https://github.com/zyom45/mcp-fw)
+🚧 **Design phase** — Runtime implementation in progress.
 
 ## License
 
